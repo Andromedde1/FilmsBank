@@ -53,6 +53,55 @@ body {
   margin-top: 0.35rem;
 }
 
+.sync-status {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--success);
+}
+
+.sync-status.offline {
+  color: var(--danger);
+}
+
+.setup-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+}
+
+.setup-panel.hidden {
+  display: none;
+}
+
+.setup-panel h2 {
+  color: var(--text);
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.setup-panel ol {
+  margin: 0.75rem 0 0 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.setup-panel a {
+  color: var(--accent-hover);
+}
+
+.setup-panel code {
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
