@@ -1,4 +1,5 @@
 const STORAGE_KEY = "movieBank";
+const COLLECTION = "movies";
 
 const COLORS = [
   "#6c5ce7", "#a29bfe", "#fd79a8", "#fdcb6e",
@@ -10,6 +11,10 @@ const state = {
   movies: [],
   rotation: 0,
   spinning: false,
+  online: false,
+  configured: false,
+  db: null,
+  unsubscribe: null,
 };
 
 const els = {
@@ -24,61 +29,148 @@ const els = {
   spinBtn: document.getElementById("spin-btn"),
   result: document.getElementById("roulette-result"),
   emptyRoulette: document.getElementById("empty-roulette"),
+  syncStatus: document.getElementById("sync-status"),
+  setupPanel: document.getElementById("setup-panel"),
 };
 
 const ctx = els.wheel.getContext("2d");
-
-function loadMovies() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    state.movies = Array.isArray(parsed) ? dedupeMovies(parsed) : [];
-    saveMovies();
-  } catch {
-    state.movies = [];
-  }
-}
-
-function saveMovies() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.movies));
-}
 
 function normalizeTitle(title) {
   return title.trim().replace(/\s+/g, " ");
 }
 
-function dedupeMovies(movies) {
-  const seen = new Set();
-  const result = [];
-  for (const movie of movies) {
-    const title = normalizeTitle(String(movie));
-    if (!title) continue;
-    const key = title.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(title);
-  }
-  return result;
+function isFirebaseConfigured() {
+  const config = window.FIREBASE_CONFIG;
+  return Boolean(
+    config &&
+    config.apiKey &&
+    config.projectId &&
+    config.appId
+  );
 }
 
-function addMovie(title) {
-  const normalized = normalizeTitle(title);
-  if (!normalized) return false;
+function setOnline(online, message) {
+  state.online = online;
+  if (!els.syncStatus) return;
 
-  const exists = state.movies.some(
-    (m) => m.toLowerCase() === normalized.toLowerCase()
-  );
-  if (exists) return false;
+  if (message) {
+    els.syncStatus.textContent = message;
+  } else {
+    els.syncStatus.textContent = online
+      ? "Общий банк — синхронизирован"
+      : "Нет связи с облаком";
+  }
 
-  state.movies.push(normalized);
-  saveMovies();
+  els.syncStatus.classList.toggle("offline", !online);
+}
+
+function showSetupPanel(show) {
+  els.setupPanel.classList.toggle("hidden", !show);
+  els.form.querySelector("button[type='submit']").disabled = show;
+  els.input.disabled = show;
+}
+
+function initFirebase() {
+  if (!isFirebaseConfigured()) {
+    state.configured = false;
+    showSetupPanel(true);
+    setOnline(false, "Firebase не настроен");
+    return false;
+  }
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+  }
+
+  state.db = firebase.firestore();
+  state.configured = true;
+  showSetupPanel(false);
   return true;
 }
 
-function removeMovie(title) {
-  const key = title.toLowerCase();
-  state.movies = state.movies.filter((m) => m.toLowerCase() !== key);
-  saveMovies();
+function mapSnapshot(snapshot) {
+  return snapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      title: doc.data().title,
+      createdAt: doc.data().createdAt?.toMillis?.() || 0,
+    }))
+    .sort((a, b) => a.createdAt - b.createdAt || a.title.localeCompare(b.title, "ru"));
+}
+
+function subscribeToMovies() {
+  if (!state.db) return;
+
+  if (state.unsubscribe) {
+    state.unsubscribe();
+  }
+
+  state.unsubscribe = state.db
+    .collection(COLLECTION)
+    .onSnapshot(
+      (snapshot) => {
+        if (state.spinning) return;
+
+        state.movies = mapSnapshot(snapshot);
+        setOnline(true);
+        renderAll();
+      },
+      () => {
+        setOnline(false);
+      }
+    );
+}
+
+async function migrateLocalStorage() {
+  if (!state.db) return;
+
+  let titles = [];
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    titles = raw ? JSON.parse(raw) : [];
+  } catch {
+    titles = [];
+  }
+
+  if (!Array.isArray(titles) || titles.length === 0) return;
+
+  const existing = new Set(state.movies.map((movie) => movie.title.toLowerCase()));
+
+  for (const title of titles) {
+    const normalized = normalizeTitle(String(title));
+    if (!normalized) continue;
+    if (existing.has(normalized.toLowerCase())) continue;
+
+    await state.db.collection(COLLECTION).add({
+      title: normalized,
+      titleLower: normalized.toLowerCase(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  localStorage.removeItem(STORAGE_KEY);
+}
+
+async function addMovie(title) {
+  const normalized = normalizeTitle(title);
+  if (!normalized) return "empty";
+
+  const exists = state.movies.some(
+    (movie) => movie.title.toLowerCase() === normalized.toLowerCase()
+  );
+  if (exists) return "duplicate";
+
+  await state.db.collection(COLLECTION).add({
+    title: normalized,
+    titleLower: normalized.toLowerCase(),
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return "ok";
+}
+
+async function removeMovie(id) {
+  await state.db.collection(COLLECTION).doc(id).delete();
 }
 
 function switchTab(tabId) {
@@ -99,19 +191,24 @@ function renderBank() {
 
   els.emptyBank.classList.toggle("hidden", hasMovies);
 
-  state.movies.forEach((title) => {
+  state.movies.forEach((movie) => {
     const li = document.createElement("li");
     const span = document.createElement("span");
     span.className = "title";
-    span.textContent = title;
+    span.textContent = movie.title;
 
     const btn = document.createElement("button");
     btn.className = "remove-btn";
     btn.type = "button";
     btn.textContent = "Удалить";
-    btn.addEventListener("click", () => {
-      removeMovie(title);
-      renderAll();
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await removeMovie(movie.id);
+      } catch {
+        els.hint.textContent = "Не удалось удалить фильм. Проверьте связь с облаком.";
+        btn.disabled = false;
+      }
     });
 
     li.append(span, btn);
@@ -121,7 +218,7 @@ function renderBank() {
 
 function renderRouletteControls() {
   const hasMovies = state.movies.length > 0;
-  els.spinBtn.disabled = !hasMovies || state.spinning;
+  els.spinBtn.disabled = !hasMovies || state.spinning || !state.online || !state.configured;
   els.emptyRoulette.classList.toggle("hidden", hasMovies);
   els.wheel.style.display = hasMovies ? "block" : "none";
   document.querySelector(".pointer").style.display = hasMovies ? "block" : "none";
@@ -158,7 +255,7 @@ function drawWheel() {
 
   const slice = (Math.PI * 2) / movies.length;
 
-  movies.forEach((title, i) => {
+  movies.forEach((movie, i) => {
     const start = state.rotation + i * slice;
     const end = start + slice;
     const mid = start + slice / 2;
@@ -180,7 +277,7 @@ function drawWheel() {
     ctx.fillStyle = "#fff";
     ctx.font = movies.length > 12 ? "bold 11px Segoe UI, sans-serif" : "bold 13px Segoe UI, sans-serif";
 
-    const lines = wrapText(title, radius * 0.55);
+    const lines = wrapText(movie.title, radius * 0.55);
     const lineHeight = 15;
     const startY = -(lines.length - 1) * lineHeight / 2;
 
@@ -200,14 +297,14 @@ function drawWheel() {
 }
 
 function spinWheel() {
-  if (state.spinning || state.movies.length === 0) return;
+  if (state.spinning || state.movies.length === 0 || !state.online) return;
 
   state.spinning = true;
   els.spinBtn.disabled = true;
   els.result.textContent = "Крутим...";
   els.result.classList.add("spinning");
 
-  const movies = state.movies;
+  const movies = [...state.movies];
   const winnerIndex = Math.floor(Math.random() * movies.length);
   const slice = (Math.PI * 2) / movies.length;
   const extraSpins = 4 + Math.floor(Math.random() * 3);
@@ -236,18 +333,24 @@ function spinWheel() {
   requestAnimationFrame(animate);
 }
 
-function finishSpin(winner) {
-  els.result.textContent = `Выпало: «${winner}»`;
+async function finishSpin(winner) {
   els.result.classList.remove("spinning");
 
-  removeMovie(winner);
-  state.spinning = false;
-  renderAll();
+  try {
+    await removeMovie(winner.id);
+    state.movies = state.movies.filter((movie) => movie.id !== winner.id);
+    state.spinning = false;
+    renderAll();
 
-  if (state.movies.length > 0) {
-    els.result.textContent = `Выпало: «${winner}» — удалён из банка`;
-  } else {
-    els.result.textContent = `Выпало: «${winner}» — банк пуст`;
+    if (state.movies.length > 0) {
+      els.result.textContent = `Выпало: «${winner.title}» — удалён из банка`;
+    } else {
+      els.result.textContent = `Выпало: «${winner.title}» — банк пуст`;
+    }
+  } catch {
+    state.spinning = false;
+    renderAll();
+    els.result.textContent = "Не удалось удалить фильм из облака.";
   }
 }
 
@@ -261,29 +364,50 @@ els.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
 
-els.form.addEventListener("submit", (e) => {
+els.form.addEventListener("submit", async (e) => {
   e.preventDefault();
   els.hint.textContent = "";
 
-  const value = els.input.value;
-  const added = addMovie(value);
+  if (!state.configured) {
+    els.hint.textContent = "Сначала настройте Firebase (см. инструкцию выше).";
+    return;
+  }
 
+  const value = els.input.value;
   if (!normalizeTitle(value)) {
     els.hint.textContent = "Введите название фильма.";
     return;
   }
 
-  if (!added) {
-    els.hint.textContent = "Такой фильм уже есть в банке.";
-    return;
-  }
+  const submitBtn = els.form.querySelector("button[type='submit']");
+  submitBtn.disabled = true;
 
-  els.input.value = "";
-  els.input.focus();
-  renderAll();
+  try {
+    const result = await addMovie(value);
+    if (result === "duplicate") {
+      els.hint.textContent = "Такой фильм уже есть в банке.";
+    } else {
+      els.input.value = "";
+      els.input.focus();
+    }
+  } catch {
+    els.hint.textContent = "Не удалось добавить фильм. Проверьте Firebase.";
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 
 els.spinBtn.addEventListener("click", spinWheel);
 
-loadMovies();
-renderAll();
+async function boot() {
+  if (!initFirebase()) {
+    renderAll();
+    return;
+  }
+
+  subscribeToMovies();
+  await migrateLocalStorage();
+  renderAll();
+}
+
+boot();
