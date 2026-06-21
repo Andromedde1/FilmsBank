@@ -11,7 +11,20 @@
     <header class="header">
       <h1>Банк фильмов</h1>
       <p class="subtitle">Собирайте список и крутите рулетку</p>
+      <p id="sync-status" class="sync-status">Загрузка...</p>
     </header>
+
+    <div id="setup-panel" class="setup-panel hidden">
+      <h2>Нужна настройка Firebase</h2>
+      <p>Для общего банка на GitHub Pages подключите Firebase Firestore:</p>
+      <ol>
+        <li>Создайте проект на <a href="https://console.firebase.google.com" target="_blank" rel="noopener">console.firebase.google.com</a></li>
+        <li>Включите <strong>Firestore Database</strong></li>
+        <li>Добавьте Web-приложение и скопируйте конфиг в <code>js/firebase-config.js</code></li>
+        <li>Опубликуйте правила из файла <code>firestore.rules</code></li>
+        <li>Запушьте изменения в GitHub — сайт обновится автоматически</li>
+      </ol>
+    </div>
 
     <nav class="tabs">
       <button class="tab active" data-tab="bank">Банк фильмов</button>
@@ -48,6 +61,9 @@
     </main>
   </div>
 
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
