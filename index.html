@@ -7,6 +7,23 @@
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <button id="history-btn" class="history-btn" type="button" aria-label="История выпавших фильмов">
+    История
+    <span id="history-count" class="history-count hidden">0</span>
+  </button>
+
+  <div id="history-modal" class="history-modal hidden" aria-hidden="true">
+    <div class="history-backdrop" data-close-history></div>
+    <div class="history-panel" role="dialog" aria-labelledby="history-title">
+      <div class="history-header">
+        <h2 id="history-title">История выпавших</h2>
+        <button id="history-close" class="history-close" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <ul id="history-list" class="history-list"></ul>
+      <p id="history-empty" class="empty-state">Пока ничего не выпадало.</p>
+    </div>
+  </div>
+
   <div class="app">
     <header class="header">
       <h1>Банк фильмов</h1>
