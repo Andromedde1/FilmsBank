@@ -1,5 +1,6 @@
 const STORAGE_KEY = "movieBank";
 const COLLECTION = "movies";
+const HISTORY_COLLECTION = "history";
 
 const COLORS = [
   "#6c5ce7", "#a29bfe", "#fd79a8", "#fdcb6e",
@@ -9,12 +10,14 @@ const COLORS = [
 
 const state = {
   movies: [],
+  history: [],
   rotation: 0,
   spinning: false,
   online: false,
   configured: false,
   db: null,
   unsubscribe: null,
+  unsubscribeHistory: null,
 };
 
 const els = {
@@ -31,6 +34,12 @@ const els = {
   emptyRoulette: document.getElementById("empty-roulette"),
   syncStatus: document.getElementById("sync-status"),
   setupPanel: document.getElementById("setup-panel"),
+  historyBtn: document.getElementById("history-btn"),
+  historyCount: document.getElementById("history-count"),
+  historyModal: document.getElementById("history-modal"),
+  historyList: document.getElementById("history-list"),
+  historyEmpty: document.getElementById("history-empty"),
+  historyClose: document.getElementById("history-close"),
 };
 
 const ctx = els.wheel.getContext("2d");
@@ -98,6 +107,26 @@ function mapSnapshot(snapshot) {
     .sort((a, b) => a.createdAt - b.createdAt || a.title.localeCompare(b.title, "ru"));
 }
 
+function mapHistorySnapshot(snapshot) {
+  return snapshot.docs
+    .map((doc) => ({
+      id: doc.id,
+      title: doc.data().title,
+      drawnAt: doc.data().drawnAt?.toMillis?.() || 0,
+    }))
+    .sort((a, b) => b.drawnAt - a.drawnAt);
+}
+
+function formatHistoryDate(timestamp) {
+  if (!timestamp) return "Только что";
+  return new Date(timestamp).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function subscribeToMovies() {
   if (!state.db) return;
 
@@ -119,6 +148,67 @@ function subscribeToMovies() {
         setOnline(false);
       }
     );
+}
+
+function subscribeToHistory() {
+  if (!state.db) return;
+
+  if (state.unsubscribeHistory) {
+    state.unsubscribeHistory();
+  }
+
+  state.unsubscribeHistory = state.db
+    .collection(HISTORY_COLLECTION)
+    .onSnapshot(
+      (snapshot) => {
+        state.history = mapHistorySnapshot(snapshot);
+        renderHistory();
+      },
+      () => {
+        setOnline(false);
+      }
+    );
+}
+
+async function addToHistory(title) {
+  await state.db.collection(HISTORY_COLLECTION).add({
+    title,
+    drawnAt: firebase.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+function renderHistory() {
+  const hasHistory = state.history.length > 0;
+
+  els.historyCount.textContent = String(state.history.length);
+  els.historyCount.classList.toggle("hidden", !hasHistory);
+  els.historyEmpty.classList.toggle("hidden", hasHistory);
+
+  els.historyList.innerHTML = "";
+
+  state.history.forEach((entry) => {
+    const li = document.createElement("li");
+    const title = document.createElement("span");
+    title.className = "history-title";
+    title.textContent = entry.title;
+
+    const date = document.createElement("span");
+    date.className = "history-date";
+    date.textContent = formatHistoryDate(entry.drawnAt);
+
+    li.append(title, date);
+    els.historyList.appendChild(li);
+  });
+}
+
+function openHistory() {
+  els.historyModal.classList.remove("hidden");
+  els.historyModal.setAttribute("aria-hidden", "false");
+}
+
+function closeHistory() {
+  els.historyModal.classList.add("hidden");
+  els.historyModal.setAttribute("aria-hidden", "true");
 }
 
 async function migrateLocalStorage() {
@@ -338,6 +428,7 @@ async function finishSpin(winner) {
 
   try {
     await removeMovie(winner.id);
+    await addToHistory(winner.title);
     state.movies = state.movies.filter((movie) => movie.id !== winner.id);
     state.spinning = false;
     renderAll();
@@ -399,13 +490,25 @@ els.form.addEventListener("submit", async (e) => {
 
 els.spinBtn.addEventListener("click", spinWheel);
 
+els.historyBtn.addEventListener("click", openHistory);
+els.historyClose.addEventListener("click", closeHistory);
+els.historyModal.querySelector("[data-close-history]").addEventListener("click", closeHistory);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !els.historyModal.classList.contains("hidden")) {
+    closeHistory();
+  }
+});
+
 async function boot() {
   if (!initFirebase()) {
+    renderHistory();
     renderAll();
     return;
   }
 
   subscribeToMovies();
+  subscribeToHistory();
   await migrateLocalStorage();
   renderAll();
 }
