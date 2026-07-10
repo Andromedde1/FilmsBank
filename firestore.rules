@@ -4,5 +4,14 @@ service cloud.firestore {
     match /movies/{movieId} {
       allow read, write: if true;
     }
+    match /history/{entryId} {
+      allow read, write: if true;
+    }
+    match /series/{seriesId} {
+      allow read, write: if true;
+    }
+    match /seriesHistory/{entryId} {
+      allow read, write: if true;
+    }
   }
 }
