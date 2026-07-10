@@ -8,7 +8,7 @@ const MODES = {
     itemLabel: "фильм",
     itemLabelPlural: "фильмы",
     historyLabel: "фильмов",
-    inputPlaceholder: "Введите название фильма...",
+    inputPlaceholder: "Добавить или найти фильм...",
     emptyBank: "Пока нет фильмов. Добавьте первый!",
     emptyRoulette: "Добавьте фильмы в банк, чтобы крутить рулетку.",
     historyTitle: "История выпавших фильмов",
@@ -22,7 +22,7 @@ const MODES = {
     itemLabel: "сериал",
     itemLabelPlural: "сериалы",
     historyLabel: "сериалов",
-    inputPlaceholder: "Введите название сериала...",
+    inputPlaceholder: "Добавить или найти сериал...",
     emptyBank: "Пока нет сериалов. Добавьте первый!",
     emptyRoulette: "Добавьте сериалы в банк, чтобы крутить рулетку.",
     historyTitle: "История выпавших сериалов",
@@ -66,7 +66,6 @@ const els = {
   appSubtitle: document.getElementById("app-subtitle"),
   form: document.getElementById("add-form"),
   input: document.getElementById("item-input"),
-  searchInput: document.getElementById("search-input"),
   hint: document.getElementById("bank-hint"),
   list: document.getElementById("item-list"),
   emptyBank: document.getElementById("empty-bank"),
@@ -100,6 +99,15 @@ function normalizeTitle(title) {
   return title.trim().replace(/\s+/g, " ");
 }
 
+function shuffleArray(array) {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function isFirebaseConfigured() {
   const config = window.FIREBASE_CONFIG;
   return Boolean(
@@ -129,7 +137,6 @@ function showSetupPanel(show) {
   els.setupPanel.classList.toggle("hidden", !show);
   els.form.querySelector("button[type='submit']").disabled = show;
   els.input.disabled = show;
-  els.searchInput.disabled = show;
 }
 
 function initFirebase() {
@@ -151,13 +158,12 @@ function initFirebase() {
 }
 
 function mapSnapshot(snapshot) {
-  return snapshot.docs
-    .map((doc) => ({
-      id: doc.id,
-      title: doc.data().title,
-      createdAt: doc.data().createdAt?.toMillis?.() || 0,
-    }))
-    .sort((a, b) => a.createdAt - b.createdAt || a.title.localeCompare(b.title, "ru"));
+  const items = snapshot.docs.map((doc) => ({
+    id: doc.id,
+    title: doc.data().title,
+    createdAt: doc.data().createdAt?.toMillis?.() || 0,
+  }));
+  return shuffleArray(items);
 }
 
 function mapHistorySnapshot(snapshot) {
@@ -432,7 +438,7 @@ function updateModeUI() {
   els.input.placeholder = config.inputPlaceholder;
   els.emptyBank.textContent = config.emptyBank;
   els.emptyRoulette.textContent = config.emptyRoulette;
-  els.searchInput.value = bank.searchQuery;
+  els.input.value = bank.searchQuery;
 
   els.globalTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.mode === state.mode);
@@ -666,8 +672,8 @@ els.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
 });
 
-els.searchInput.addEventListener("input", () => {
-  getBank().searchQuery = els.searchInput.value;
+els.input.addEventListener("input", () => {
+  getBank().searchQuery = els.input.value;
   renderBank();
 });
 
@@ -696,7 +702,9 @@ els.form.addEventListener("submit", async (e) => {
     if (result === "duplicate") {
       els.hint.textContent = `Такой ${config.itemLabel} уже есть в банке.`;
     } else {
+      getBank().searchQuery = "";
       els.input.value = "";
+      renderBank();
       els.input.focus();
     }
   } catch {
