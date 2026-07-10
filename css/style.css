@@ -179,33 +179,10 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.add-form,
-.search-form {
+.add-form {
   display: flex;
   gap: 0.6rem;
   margin-bottom: 0.75rem;
-}
-
-.search-form input {
-  flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  color: var(--text);
-  font-size: 0.95rem;
-  padding: 0.75rem 1rem;
-  outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.search-form input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.25);
-}
-
-.search-form input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .search-match {
