@@ -250,9 +250,25 @@ async function addToHistory(mode, title) {
   });
 }
 
-async function removeHistoryEntry(id) {
+async function returnHistoryEntryToBank(entry) {
   const config = getModeConfig();
-  await state.db.collection(config.historyCollection).doc(id).delete();
+  const bank = getBank();
+
+  const exists = bank.items.some(
+    (item) => item.title.toLowerCase() === entry.title.toLowerCase()
+  );
+
+  if (!exists) {
+    await state.db.collection(config.collection).add({
+      title: entry.title,
+      titleLower: entry.title.toLowerCase(),
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+
+  await state.db.collection(config.historyCollection).doc(entry.id).delete();
+
+  return exists ? "duplicate" : "ok";
 }
 
 function filterItemsBySearch(items, query) {
@@ -314,14 +330,20 @@ function renderHistory() {
     info.append(title, date);
 
     const btn = document.createElement("button");
-    btn.className = "history-remove-btn";
+    btn.className = "history-return-btn";
     btn.type = "button";
-    btn.textContent = "Удалить";
+    btn.textContent = "Вернуть";
     btn.addEventListener("click", async () => {
       btn.disabled = true;
       try {
-        await removeHistoryEntry(entry.id);
+        const result = await returnHistoryEntryToBank(entry);
+        if (result === "duplicate") {
+          els.hint.textContent = `«${entry.title}» уже есть в банке — убрано из истории.`;
+        } else {
+          els.hint.textContent = `«${entry.title}» возвращён в банк.`;
+        }
       } catch {
+        els.hint.textContent = `Не удалось вернуть ${config.itemLabel} в банк. Проверьте связь с облаком.`;
         btn.disabled = false;
       }
     });
