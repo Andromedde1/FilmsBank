@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Банк фильмов</title>
+  <title>Банк фильмов и сериалов</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-  <button id="history-btn" class="history-btn" type="button" aria-label="История выпавших фильмов">
+  <button id="history-btn" class="history-btn" type="button" aria-label="История выпавших">
     История
     <span id="history-count" class="history-count hidden">0</span>
   </button>
@@ -26,8 +26,8 @@
 
   <div class="app">
     <header class="header">
-      <h1>Банк фильмов</h1>
-      <p class="subtitle">Собирайте список и крутите рулетку</p>
+      <h1 id="app-title">Банк фильмов</h1>
+      <p class="subtitle" id="app-subtitle">Собирайте список и крутите рулетку</p>
       <p id="sync-status" class="sync-status">Загрузка...</p>
     </header>
 
@@ -43,9 +43,14 @@
       </ol>
     </div>
 
-    <nav class="tabs">
-      <button class="tab active" data-tab="bank">Банк фильмов</button>
-      <button class="tab" data-tab="roulette">Рулетка</button>
+    <nav class="global-tabs" aria-label="Тип банка">
+      <button class="global-tab active" data-mode="movies" type="button">Банк фильмов</button>
+      <button class="global-tab" data-mode="series" type="button">Банк сериалов</button>
+    </nav>
+
+    <nav class="tabs" aria-label="Раздел">
+      <button class="tab active" data-tab="bank" type="button">Банк</button>
+      <button class="tab" data-tab="roulette" type="button">Рулетка</button>
     </nav>
 
     <main>
@@ -53,17 +58,27 @@
         <form id="add-form" class="add-form">
           <input
             type="text"
-            id="movie-input"
-            placeholder="Введите название фильма..."
+            id="item-input"
+            placeholder="Введите название..."
             autocomplete="off"
             maxlength="120"
             required
           >
           <button type="submit">Добавить</button>
         </form>
+        <div class="search-form">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Поиск по названию..."
+            autocomplete="off"
+            maxlength="120"
+          >
+        </div>
         <p id="bank-hint" class="hint"></p>
-        <ul id="movie-list" class="movie-list"></ul>
-        <p id="empty-bank" class="empty-state">Пока нет фильмов. Добавьте первый!</p>
+        <ul id="item-list" class="movie-list"></ul>
+        <p id="empty-bank" class="empty-state">Пока ничего нет. Добавьте первый!</p>
+        <p id="empty-search" class="empty-state hidden">Ничего не найдено.</p>
       </section>
 
       <section id="roulette" class="panel">
@@ -73,7 +88,7 @@
         </div>
         <button id="spin-btn" class="spin-btn" disabled>Крутить</button>
         <p id="roulette-result" class="result"></p>
-        <p id="empty-roulette" class="empty-state">Добавьте фильмы в банк, чтобы крутить рулетку.</p>
+        <p id="empty-roulette" class="empty-state">Добавьте элементы в банк, чтобы крутить рулетку.</p>
       </section>
     </main>
   </div>
