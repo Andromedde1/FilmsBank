@@ -514,7 +514,7 @@ body {
   flex: 1;
 }
 
-.history-remove-btn {
+.history-return-btn {
   background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
@@ -526,13 +526,13 @@ body {
   transition: color 0.2s, border-color 0.2s, background 0.2s;
 }
 
-.history-remove-btn:hover:not(:disabled) {
-  color: var(--danger);
-  border-color: var(--danger);
-  background: rgba(255, 107, 107, 0.08);
+.history-return-btn:hover:not(:disabled) {
+  color: var(--success);
+  border-color: var(--success);
+  background: rgba(46, 213, 115, 0.08);
 }
 
-.history-remove-btn:disabled {
+.history-return-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
