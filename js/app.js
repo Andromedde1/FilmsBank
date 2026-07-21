@@ -277,30 +277,65 @@ async function returnHistoryEntryToBank(entry) {
   return exists ? "duplicate" : "ok";
 }
 
+function getSearchMatchScore(title, query) {
+  const normalized = normalizeTitle(query).toLowerCase();
+  if (!normalized) return -1;
+
+  const lowerTitle = title.toLowerCase();
+  if (lowerTitle.startsWith(normalized)) return 0;
+
+  const words = lowerTitle.split(/\s+/);
+  if (words.some((word) => word.startsWith(normalized))) return 1;
+  if (words.some((word) => word.includes(normalized))) return 2;
+
+  return Infinity;
+}
+
 function filterItemsBySearch(items, query) {
   const normalized = normalizeTitle(query).toLowerCase();
   if (!normalized) return items;
 
-  return items.filter((item) =>
-    item.title.toLowerCase().startsWith(normalized)
-  );
+  return items
+    .map((item) => ({ item, score: getSearchMatchScore(item.title, normalized) }))
+    .filter(({ score }) => score !== Infinity)
+    .sort((a, b) => {
+      if (a.score !== b.score) return a.score - b.score;
+      return a.item.title.localeCompare(b.item.title, "ru");
+    })
+    .map(({ item }) => item);
 }
 
 function createHighlightedTitle(title, query) {
   const container = document.createElement("span");
   const normalizedQuery = normalizeTitle(query).toLowerCase();
 
-  if (!normalizedQuery || !title.toLowerCase().startsWith(normalizedQuery)) {
+  if (!normalizedQuery || getSearchMatchScore(title, normalizedQuery) === Infinity) {
     container.textContent = title;
     return container;
   }
 
-  const matchLength = normalizedQuery.length;
-  const highlight = document.createElement("span");
-  highlight.className = "search-match";
-  highlight.textContent = title.slice(0, matchLength);
+  const lowerTitle = title.toLowerCase();
+  let lastIndex = 0;
+  let matchIndex = lowerTitle.indexOf(normalizedQuery, lastIndex);
 
-  container.append(highlight, document.createTextNode(title.slice(matchLength)));
+  while (matchIndex !== -1) {
+    if (matchIndex > lastIndex) {
+      container.appendChild(document.createTextNode(title.slice(lastIndex, matchIndex)));
+    }
+
+    const highlight = document.createElement("span");
+    highlight.className = "search-match";
+    highlight.textContent = title.slice(matchIndex, matchIndex + normalizedQuery.length);
+    container.appendChild(highlight);
+
+    lastIndex = matchIndex + normalizedQuery.length;
+    matchIndex = lowerTitle.indexOf(normalizedQuery, lastIndex);
+  }
+
+  if (lastIndex < title.length) {
+    container.appendChild(document.createTextNode(title.slice(lastIndex)));
+  }
+
   return container;
 }
 
